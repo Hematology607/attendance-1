@@ -921,25 +921,46 @@ function applySheetStyle(ws, memberName) {
   ];
 }
 
-// ── 匯出當前成員（單人）→ xlsx ──
+// ── 共用：CSV 備援匯出 ──
+function downloadCSV(aoa, filename) {
+  const csv = aoa.map(row =>
+    row.map(cell => {
+      const s = String(cell ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')
+  ).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ── 匯出當前成員（單人）──
 function exportExcel() {
   saveAllData();
   const mk = getMonthKey();
   const rows = getOrInitRows();
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rowsToAoa(rows));
-  applySheetStyle(ws, currentMember);
-  XLSX.utils.book_append_sheet(wb, ws, currentMember);
-  XLSX.writeFile(wb, `打卡紀錄_${currentMember}_${mk}.xlsx`);
+  if (typeof XLSX !== 'undefined') {
+    try {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(rowsToAoa(rows));
+      applySheetStyle(ws);
+      XLSX.utils.book_append_sheet(wb, ws, currentMember);
+      XLSX.writeFile(wb, `打卡紀錄_${currentMember}_${mk}.xlsx`);
+      return;
+    } catch(e) { console.warn('XLSX error, falling back to CSV', e); }
+  }
+  // CSV 備援
+  downloadCSV(rowsToAoa(rows), `打卡紀錄_${currentMember}_${mk}.csv`);
+  showToast('📥 已匯出 CSV（Excel 可開啟）');
 }
 
-// ── 匯出全部成員（管理員）→ 多分頁 xlsx ──
+// ── 匯出全部成員（管理員）──
 async function exportAllExcel() {
   saveAllData();
   const mk = getMonthKey();
   showToast('🔄 準備匯出中...');
 
-  // Try to pull fresh data from cloud for all members
   if (isCloudEnabled()) {
     setSyncStatus('syncing');
     const cloudAll = await cloudLoadAllMembers(mk);
@@ -953,16 +974,27 @@ async function exportAllExcel() {
     }
   }
 
-  const wb = XLSX.utils.book_new();
+  if (typeof XLSX !== 'undefined') {
+    try {
+      const wb = XLSX.utils.book_new();
+      members.forEach(m => {
+        const rows = (appData[m.name] && appData[m.name][mk]) || buildEmptyMonth(currentYear, currentMonth);
+        const ws = XLSX.utils.aoa_to_sheet(rowsToAoa(rows));
+        applySheetStyle(ws);
+        XLSX.utils.book_append_sheet(wb, ws, m.name);
+      });
+      XLSX.writeFile(wb, `打卡紀錄_全員_${mk}.xlsx`);
+      showToast(`✅ 已匯出 ${members.length} 位成員！`);
+      return;
+    } catch(e) { console.warn('XLSX error, falling back to CSV', e); }
+  }
+
+  // CSV 備援：每人一個檔案
   members.forEach(m => {
     const rows = (appData[m.name] && appData[m.name][mk]) || buildEmptyMonth(currentYear, currentMonth);
-    const ws = XLSX.utils.aoa_to_sheet(rowsToAoa(rows));
-    applySheetStyle(ws, m.name);
-    XLSX.utils.book_append_sheet(wb, ws, m.name);
+    downloadCSV(rowsToAoa(rows), `打卡紀錄_${m.name}_${mk}.csv`);
   });
-
-  XLSX.writeFile(wb, `打卡紀錄_全員_${mk}.xlsx`);
-  showToast(`✅ 已匯出 ${members.length} 位成員的 ${mk} 打卡紀錄！`);
+  showToast(`📥 已匯出 ${members.length} 位成員的 CSV！`);
 }
 
 function showToast(msg) {
