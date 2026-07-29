@@ -422,9 +422,6 @@ create policy "public_rw" on settings
 <div class="save-toast" id="save-toast">✅ 已儲存！</div>
 
 <script>
-// ══════════════════════════════════════════
-//  INITIAL DEFAULTS
-// ══════════════════════════════════════════
 const INITIAL_MEMBERS = [
   { name: '黃惠雯', password: 'hw0001' },
   { name: '李宇傑', password: 'lj0001' },
@@ -438,9 +435,6 @@ const INITIAL_MEMBERS = [
   { name: '黃詩芸', password: 'hsy001' }
 ];
 
-// ══════════════════════════════════════════
-//  SUPABASE CLOUD
-// ══════════════════════════════════════════
 let sbUrl = '', sbKey = '';
 
 function loadCloudConfig() {
@@ -466,7 +460,6 @@ async function sbReq(method, path, body, extra = {}) {
 
 const UPSERT_HDR = { 'Prefer': 'resolution=merge-duplicates,return=minimal' };
 
-// Attendance
 async function cloudSave(member, mk, rows) {
   if (!isCloudEnabled()) return;
   setSyncStatus('syncing');
@@ -483,10 +476,9 @@ async function cloudLoad(member, mk) {
 async function cloudLoadAllMembers(mk) {
   if (!isCloudEnabled()) return null;
   const d = await sbReq('GET', `attendance?month=eq.${encodeURIComponent(mk)}&select=member,rows`);
-  return d; // [{member, rows}, ...]
+  return d;
 }
 
-// Settings (members list + passwords)
 async function cloudSaveSetting(key, value) {
   if (!isCloudEnabled()) return;
   await sbReq('POST', 'settings', { key, value }, UPSERT_HDR);
@@ -507,7 +499,6 @@ async function syncSettingsFromCloud() {
   if (cp && typeof cp === 'object') { Object.assign(passwords, cp); savePasswords(); }
 }
 
-// Sync status UI
 function setSyncStatus(s) {
   const el = document.getElementById('sync-status');
   if (!el) return;
@@ -518,7 +509,6 @@ function setSyncStatus(s) {
 
 function updateSyncStatus() { setSyncStatus(isCloudEnabled() ? 'synced' : 'disabled'); }
 
-// Cloud config modal
 function showCloudModal() {
   document.getElementById('cloud-url').value = sbUrl;
   document.getElementById('cloud-key').value = sbKey;
@@ -549,10 +539,8 @@ async function connectCloud() {
   localStorage.setItem('ct_sb_key', key);
   closeCloudModal();
   setSyncStatus('syncing');
-  // Push current local data to cloud
   await cloudSaveSetting('members', members);
   await cloudSaveSetting('passwords', passwords);
-  // Push all attendance data
   for (const [member, months] of Object.entries(appData)) {
     for (const [mk, rows] of Object.entries(months)) {
       await cloudSave(member, mk, rows);
@@ -582,17 +570,13 @@ const STORAGE_KEY = 'ct_attendance_v2';
 const PW_KEY      = 'ct_passwords_v2';
 const MEMBERS_KEY = 'ct_members_v2';
 
-// ── State ──
 let currentUser   = null;
 let currentMember = null;
 let currentYear, currentMonth;
 let appData   = {};
 let passwords = {};
-let members   = []; // [{ name }]  — passwords stored separately in passwords{}
+let members   = [];
 
-// ══════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════
 function init() {
   loadCloudConfig();
   loadMembers();
@@ -604,7 +588,6 @@ function init() {
   currentMonth = now.getMonth() + 1;
 }
 
-// ── Members persistence ──
 function loadMembers() {
   const saved = localStorage.getItem(MEMBERS_KEY);
   if (saved) {
@@ -619,7 +602,6 @@ function saveMembers() {
   localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
 }
 
-// ── Passwords persistence ──
 function loadPasswords() {
   const saved = localStorage.getItem(PW_KEY);
   if (saved) {
@@ -635,7 +617,6 @@ function savePasswords() {
   localStorage.setItem(PW_KEY, JSON.stringify(passwords));
 }
 
-// ── Attendance data persistence ──
 function loadData() {
   const saved = localStorage.getItem(STORAGE_KEY);
   appData = saved ? JSON.parse(saved) : {};
@@ -645,10 +626,8 @@ function saveAllData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
 }
 
-// ── Login select ──
 function populateLoginSelect() {
   const sel = document.getElementById('login-name');
-  // Remove all options except the first two (blank + admin)
   while (sel.options.length > 2) sel.remove(2);
   members.forEach(m => {
     const opt = document.createElement('option');
@@ -658,9 +637,6 @@ function populateLoginSelect() {
   });
 }
 
-// ══════════════════════════════════════════
-//  LOGIN / LOGOUT
-// ══════════════════════════════════════════
 function doLogin() {
   const name = document.getElementById('login-name').value;
   const pw   = document.getElementById('login-pw').value;
@@ -690,9 +666,6 @@ function doLogout() {
   document.getElementById('app').style.display = 'none';
 }
 
-// ══════════════════════════════════════════
-//  APP SHELL
-// ══════════════════════════════════════════
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
@@ -704,7 +677,6 @@ function showApp() {
   document.getElementById('btn-export-all').style.display  = isAdmin ? 'inline-block' : 'none';
   document.getElementById('btn-cloud-cfg').style.display   = isAdmin ? 'inline-block' : 'none';
 
-  // Admin: sync settings from cloud on login
   if (isAdmin && isCloudEnabled()) {
     setSyncStatus('syncing');
     syncSettingsFromCloud().then(() => setSyncStatus('synced')).catch(() => setSyncStatus('error'));
@@ -732,9 +704,6 @@ function renderMemberTabs() {
   });
 }
 
-// ══════════════════════════════════════════
-//  SHEET
-// ══════════════════════════════════════════
 function renderSheet() {
   document.getElementById('sheet-title').textContent =
     currentUser === 'admin' ? `${currentMember} 的打卡紀錄` : `${currentUser} 的打卡紀錄`;
@@ -742,17 +711,14 @@ function renderSheet() {
   renderTable();
   renderSummary();
 
-  // Background cloud sync: fetch latest data for this member/month
   if (isCloudEnabled()) {
     const snap = { member: currentMember, mk: getMonthKey() };
     setSyncStatus('syncing');
     cloudLoad(snap.member, snap.mk).then(cloudRows => {
       if (!cloudRows) { setSyncStatus(isCloudEnabled() ? 'error' : 'disabled'); return; }
-      // Update local cache
       if (!appData[snap.member]) appData[snap.member] = {};
       appData[snap.member][snap.mk] = cloudRows;
       saveAllData();
-      // Re-render only if still viewing same sheet
       if (currentMember === snap.member && getMonthKey() === snap.mk) { renderTable(); renderSummary(); }
       setSyncStatus('synced');
     }).catch(() => setSyncStatus('error'));
@@ -875,14 +841,12 @@ function saveData() {
   saveAllData();
   renderSummary();
   showToast('✅ 已儲存！');
-  // Push to cloud in background
   if (isCloudEnabled()) {
     const rows = getOrInitRows();
     cloudSave(currentMember, getMonthKey(), rows);
   }
 }
 
-// ── 共用：把一個成員的 rows 轉成 SheetJS 二維陣列 ──
 const XLSX_HEADERS = [
   '日期','星期','上班時間起','下班時間訖','上下班補充說明',
   '加班①起','加班①訖','加班①時數','加班①說明',
@@ -912,8 +876,7 @@ function rowsToAoa(rows) {
   return aoa;
 }
 
-function applySheetStyle(ws, memberName) {
-  // Column widths
+function applySheetStyle(ws) {
   ws['!cols'] = [
     {wch:12},{wch:5},{wch:10},{wch:10},{wch:22},
     {wch:10},{wch:10},{wch:8},{wch:22},
@@ -921,7 +884,6 @@ function applySheetStyle(ws, memberName) {
   ];
 }
 
-// ── 共用：CSV 備援匯出 ──
 function downloadCSV(aoa, filename) {
   const csv = aoa.map(row =>
     row.map(cell => {
@@ -930,12 +892,11 @@ function downloadCSV(aoa, filename) {
         ? `"${s.replace(/"/g, '""')}"` : s;
     }).join(',')
   ).join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
   a.click(); URL.revokeObjectURL(a.href);
 }
 
-// ── 匯出當前成員（單人）──
 function exportExcel() {
   saveAllData();
   const mk = getMonthKey();
@@ -950,12 +911,10 @@ function exportExcel() {
       return;
     } catch(e) { console.warn('XLSX error, falling back to CSV', e); }
   }
-  // CSV 備援
   downloadCSV(rowsToAoa(rows), `打卡紀錄_${currentMember}_${mk}.csv`);
   showToast('📥 已匯出 CSV（Excel 可開啟）');
 }
 
-// ── 匯出全部成員（管理員）──
 async function exportAllExcel() {
   saveAllData();
   const mk = getMonthKey();
@@ -989,7 +948,6 @@ async function exportAllExcel() {
     } catch(e) { console.warn('XLSX error, falling back to CSV', e); }
   }
 
-  // CSV 備援：每人一個檔案
   members.forEach(m => {
     const rows = (appData[m.name] && appData[m.name][mk]) || buildEmptyMonth(currentYear, currentMonth);
     downloadCSV(rowsToAoa(rows), `打卡紀錄_${m.name}_${mk}.csv`);
@@ -1003,14 +961,10 @@ function showToast(msg) {
   setTimeout(() => t.style.display = 'none', 2200);
 }
 
-// ══════════════════════════════════════════
-//  PASSWORD MODAL
-// ══════════════════════════════════════════
 function showPwModal() {
   let html = '<div class="pw-grid">';
   html += `<div><label>管理員密碼</label><input type="password" id="pw-admin" value="${escHtml(passwords['admin'])}" autocomplete="off"></div>`;
   members.forEach(m => {
-    const safeId = CSS.escape(m.name);
     html += `<div><label>${m.name}</label><input type="password" data-name="${escHtml(m.name)}" class="pw-member-input" value="${escHtml(passwords[m.name] || '')}" autocomplete="off"></div>`;
   });
   html += '</div>';
@@ -1031,10 +985,6 @@ function savePw() {
   showToast('✅ 密碼已更新！');
 }
 
-// ══════════════════════════════════════════
-//  MEMBER MANAGEMENT MODAL
-// ══════════════════════════════════════════
-// tempMembers: working copy while modal is open
 let tempMembers = [];
 
 function showMemberModal() {
@@ -1078,18 +1028,16 @@ function addMember() {
   if (tempMembers.some(m => m.name === name)) { alert('此成員已存在'); return; }
 
   tempMembers.push({ name });
-  passwords[name] = pw;          // save pw immediately so saveMemberList sees it
+  passwords[name] = pw;
   nameEl.value = '';
   pwEl.value   = '';
   renderMemberListInModal();
 }
 
 function saveMemberList() {
-  // Collect any name edits from inputs (oninput already updates tempMembers, but let's be safe)
   const inputs = document.querySelectorAll('#member-list-wrap tbody input[type="text"]');
   inputs.forEach((el, i) => { if (tempMembers[i]) tempMembers[i].name = el.value.trim(); });
 
-  // Validate: no empty names, no duplicates
   const names = tempMembers.map(m => m.name);
   if (names.some(n => !n)) { alert('成員姓名不可為空'); return; }
   if (new Set(names).size !== names.length) { alert('成員姓名有重複，請修正'); return; }
@@ -1098,7 +1046,6 @@ function saveMemberList() {
   saveMembers();
   savePasswords();
 
-  // Refresh login select & tabs
   populateLoginSelect();
   if (currentUser === 'admin') {
     if (!members.find(m => m.name === currentMember)) {
@@ -1116,7 +1063,6 @@ function saveMemberList() {
   showToast('✅ 成員名單已更新！');
 }
 
-// ── Start ──
 init();
 </script>
 </body>
