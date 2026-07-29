@@ -859,7 +859,8 @@ function autoCalcOt(idx, period) {
     const [eh, em] = row[endKey].split(':').map(Number);
     let mins = (eh * 60 + em) - (sh * 60 + sm);
     if (mins < 0) mins += 1440;
-    row[hoursKey] = mins > 0 ? String(Math.round(mins / 60 * 2) / 2) : '';
+    const h = Math.floor(mins / 30) * 0.5; // 滿30分鐘才算0.5小時，未滿捨去
+    row[hoursKey] = h > 0 ? String(h) : '';
     const el = document.querySelector(`#${displayId} input`);
     if (el) el.value = row[hoursKey];
   }
@@ -1141,4 +1142,5 @@ init();
 </script>
 </body>
 </html>
+
 
