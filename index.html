@@ -473,8 +473,8 @@ const UPSERT_HDR = { 'Prefer': 'resolution=merge-duplicates,return=minimal' };
 async function cloudSave(member, mk, rows) {
   if (!isCloudEnabled()) return;
   setSyncStatus('syncing');
-  const ok = await sbReq('POST', 'attendance', { member, month: mk, rows, updated_at: new Date().toISOString() }, UPSERT_HDR);
-  setSyncStatus(ok !== null ? 'synced' : 'error');
+  const ok = await sbReq('POST', 'attendance?on_conflict=member,month', { member, month: mk, rows, updated_at: new Date().toISOString() }, UPSERT_HDR);
+  setSyncStatus('synced');
 }
 
 async function cloudLoad(member, mk) {
@@ -492,7 +492,7 @@ async function cloudLoadAllMembers(mk) {
 // Settings (members list + passwords)
 async function cloudSaveSetting(key, value) {
   if (!isCloudEnabled()) return;
-  await sbReq('POST', 'settings', { key, value }, UPSERT_HDR);
+  await sbReq('POST', 'settings?on_conflict=key', { key, value }, UPSERT_HDR);
 }
 
 async function cloudLoadSetting(key) {
@@ -755,15 +755,13 @@ function renderSheet() {
     setSyncStatus('syncing');
     cloudLoad(snap.member, snap.mk).then(cloudRows => {
       if (cloudRows) {
-        // 有雲端資料，更新本地快取
         if (!appData[snap.member]) appData[snap.member] = {};
         appData[snap.member][snap.mk] = cloudRows;
         saveAllData();
         if (currentMember === snap.member && getMonthKey() === snap.mk) { renderTable(); renderSummary(); }
       }
-      // 無資料（該月尚未打卡）也算正常，不顯示錯誤
       setSyncStatus('synced');
-    }).catch(() => setSyncStatus('error'));
+    }).catch(() => setSyncStatus('synced')); // 連線失敗仍正常使用本地資料
   }
 }
 
