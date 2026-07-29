@@ -473,7 +473,18 @@ const UPSERT_HDR = { 'Prefer': 'resolution=merge-duplicates,return=minimal' };
 async function cloudSave(member, mk, rows) {
   if (!isCloudEnabled()) return;
   setSyncStatus('syncing');
-  const ok = await sbReq('POST', 'attendance?on_conflict=member,month', { member, month: mk, rows, updated_at: new Date().toISOString() }, UPSERT_HDR);
+  const updated_at = new Date().toISOString();
+  const filter = `member=eq.${encodeURIComponent(member)}&month=eq.${encodeURIComponent(mk)}`;
+
+  // 先嘗試更新既有資料（PATCH）
+  const patched = await sbReq('PATCH', `attendance?${filter}`,
+    { rows, updated_at }, { 'Prefer': 'return=representation' });
+
+  // 如果是空陣列，代表該成員本月尚無資料 → 直接新增（POST）
+  if (Array.isArray(patched) && patched.length === 0) {
+    await sbReq('POST', 'attendance',
+      { member, month: mk, rows, updated_at }, { 'Prefer': 'return=minimal' });
+  }
   setSyncStatus('synced');
 }
 
