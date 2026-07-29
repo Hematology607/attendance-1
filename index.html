@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>臨床試驗團隊 — 線上打卡系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --primary: #1e6bb0;
+    --primary-dark: #155a96;
+    --accent: #e8f2fb;
+    --danger: #c0392b;
+    --success: #27ae60;
+    --warning: #e67e22;
+    --text: #2c3e50;
+    --text-light: #7f8c8d;
+    --border: #d5e5f5;
+    --bg: #f0f6fc;
+    --white: #ffffff;
+    --weekend: #fdf5e6;
+    --weekend-border: #f0d9a8;
+    --row-hover: #eaf3ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Login ── */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 20px;
+    background: linear-gradient(135deg, #1e6bb0 0%, #0a3d6b 100%);
+  }
+  .login-box {
+    background: var(--white); border-radius: 16px; padding: 40px;
+    width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .login-logo { text-align: center; margin-bottom: 28px; }
+  .login-logo .icon { font-size: 48px; }
+  .login-logo h1 { font-size: 20px; color: var(--primary); margin-top: 8px; font-weight: 700; }
+  .login-logo p { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .form-group select, .form-group input {
+    width: 100%; padding: 10px 14px; border: 1.5px solid #d0dde9;
+    border-radius: 8px; font-size: 15px; font-family: inherit;
+    transition: border-color 0.2s; outline: none; background: var(--white);
+  }
+  .form-group select:focus, .form-group input:focus { border-color: var(--primary); }
+  .login-btn {
+    width: 100%; padding: 12px; background: var(--primary); color: #fff;
+    border: none; border-radius: 8px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background 0.2s; font-family: inherit;
+  }
+  .login-btn:hover { background: var(--primary-dark); }
+  .login-error {
+    color: var(--danger); font-size: 13px; text-align: center;
+    margin-top: 12px; display: none;
+  }
+  .login-divider { text-align: center; margin: 16px 0; color: var(--text-light); font-size: 12px; position: relative; }
+  .login-divider::before, .login-divider::after {
+    content: ''; position: absolute; top: 50%; width: 40%; height: 1px; background: #e0e0e0;
+  }
+  .login-divider::before { left: 0; }
+  .login-divider::after { right: 0; }
+
+  /* ── App Shell ── */
+  #app { display: none; min-height: 100vh; flex-direction: column; }
+  .topbar {
+    background: var(--primary); color: #fff; padding: 0 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-title { font-size: 16px; font-weight: 700; }
+  .topbar-user {
+    background: rgba(255,255,255,0.2); padding: 4px 12px;
+    border-radius: 20px; font-size: 13px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .topbar-btn {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 13px;
+    cursor: pointer; font-family: inherit; transition: background 0.2s;
+  }
+  .topbar-btn:hover { background: rgba(255,255,255,0.25); }
+
+  /* ── Admin tabs ── */
+  #member-tabs {
+    background: #fff; border-bottom: 2px solid var(--border);
+    padding: 0 20px; display: none; overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .member-tabs-inner { display: flex; gap: 4px; padding: 8px 0; }
+  .mtab {
+    padding: 6px 16px; border-radius: 6px 6px 0 0; font-size: 13px;
+    cursor: pointer; border: 1px solid transparent; white-space: nowrap;
+    transition: all 0.15s; font-family: inherit; background: none;
+    color: var(--text-light); border-bottom: 2px solid transparent;
+  }
+  .mtab:hover { background: var(--accent); color: var(--primary); }
+  .mtab.active { background: var(--accent); color: var(--primary); font-weight: 600; border-color: var(--border); border-bottom-color: #fff; }
+
+  /* ── Main content ── */
+  .main { flex: 1; padding: 20px; }
+  .toolbar {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .toolbar h2 { font-size: 18px; font-weight: 700; color: var(--primary); flex: 1; }
+  .month-nav { display: flex; align-items: center; gap: 8px; }
+  .month-btn {
+    background: var(--white); border: 1.5px solid var(--border); color: var(--primary);
+    width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .month-btn:hover { background: var(--accent); }
+  .month-label { font-weight: 600; font-size: 15px; min-width: 90px; text-align: center; }
+  .action-btn {
+    padding: 8px 18px; border-radius: 7px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; border: none; transition: all 0.15s;
+  }
+  .btn-save { background: var(--primary); color: #fff; }
+  .btn-save:hover { background: var(--primary-dark); }
+  .btn-export { background: var(--success); color: #fff; }
+  .btn-export:hover { background: #219a52; }
+  .btn-print { background: var(--text-light); color: #fff; }
+  .btn-print:hover { background: #636e72; }
+  .save-toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--success);
+    color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; display: none; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(30,107,176,0.08); }
+  table { width: 100%; border-collapse: collapse; background: var(--white); font-size: 13px; min-width: 1260px; }
+  th.ot-group { background: #1a5c99; font-size: 11px; letter-spacing: 0.5px; }
+  th.ot-group-2 { background: #154e85; }
+  thead tr { background: var(--primary); color: #fff; }
+  th { padding: 10px 8px; text-align: center; font-weight: 600; font-size: 12px; border-right: 1px solid rgba(255,255,255,0.15); white-space: nowrap; }
+  th:last-child { border-right: none; }
+  tbody tr { border-bottom: 1px solid #eaf0f7; transition: background 0.1s; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr.weekend { background: var(--weekend); }
+  tbody tr.weekend:hover { background: #faecd0; }
+  td { padding: 6px 6px; text-align: center; vertical-align: middle; border-right: 1px solid #eaf0f7; }
+  td:last-child { border-right: none; }
+  .td-date { font-weight: 600; font-size: 12px; color: var(--text-light); white-space: nowrap; }
+  .td-day { font-weight: 700; min-width: 30px; }
+  .td-day.sat { color: #2980b9; }
+  .td-day.sun { color: var(--danger); }
+  .td-day.holiday { color: var(--danger); }
+  input[type="time"], input[type="text"], textarea {
+    border: 1px solid #d0dde9; border-radius: 5px; padding: 5px 7px;
+    font-size: 12px; font-family: inherit; width: 100%; background: #f8fbff;
+    transition: border-color 0.15s; outline: none;
+  }
+  input[type="time"]:focus, input[type="text"]:focus, textarea:focus {
+    border-color: var(--primary); background: #fff;
+  }
+  .time-col { width: 90px; min-width: 80px; }
+  .notes-col { min-width: 160px; }
+  .ot-hours-col { width: 80px; }
+  .ot-hours-display { font-weight: 700; color: var(--warning); }
+  td.attachment { text-align: center; }
+  input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
+  .stat-row { background: var(--accent) !important; font-weight: 700; }
+  .stat-row td { padding: 8px; color: var(--primary); }
+
+  /* ── Summary panel ── */
+  .summary-panel {
+    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .stat-card {
+    background: var(--white); border-radius: 10px; padding: 14px 20px;
+    border: 1.5px solid var(--border); flex: 1; min-width: 140px; text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .stat-card .val { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .stat-card .lbl { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+  .stat-card.ot .val { color: var(--warning); }
+  .stat-card.work .val { color: var(--success); }
+
+  /* ── Admin password modal ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 500; align-items: center; justify-content: center;
+  }
+  .modal-box {
+    background: #fff; border-radius: 14px; padding: 32px; width: 400px; max-width: 95vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-box h3 { font-size: 16px; margin-bottom: 16px; color: var(--primary); }
+  .modal-box table { min-width: unset; box-shadow: none; }
+  .modal-box th { font-size: 12px; background: var(--accent); color: var(--primary); }
+  .modal-box td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .modal-close {
+    float: right; background: none; border: none; font-size: 20px;
+    cursor: pointer; color: var(--text-light);
+  }
+  .modal-footer { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
+  .btn-secondary { background: #ecf0f1; color: var(--text); }
+  .btn-secondary:hover { background: #dfe6e9; }
+
+  /* Password change section in admin */
+  .pw-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .pw-grid label { font-size: 12px; color: var(--text-light); display: block; margin-bottom: 3px; }
+  .pw-grid input { font-size: 12px; }
+
+  /* Member management */
+  .modal-box.wide { width: 560px; }
+  .member-list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .member-list-table th { background: var(--accent); color: var(--primary); padding: 8px 10px; text-align: left; font-size: 12px; }
+  .member-list-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .member-list-table tr:last-child td { border-bottom: none; }
+  .member-list-table input[type="text"] { font-size: 13px; padding: 4px 8px; }
+  .btn-danger { background: #fdecea; color: var(--danger); border: 1px solid #f5c6c2; padding: 4px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .btn-danger:hover { background: #f5c6c2; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 5px; }
+  .add-member-row { display: flex; gap: 8px; margin-top: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .add-member-row .fg { flex: 1; min-width: 120px; }
+  .add-member-row label { font-size: 12px; color: var(--text-light); display: block; margin-bottom: 4px; }
+  .add-member-row input { font-size: 13px; }
+
+  @media print {
+    .topbar, #member-tabs, .toolbar .month-nav, .action-btn, .save-toast { display: none !important; }
+    .main { padding: 0; }
+    table { box-shadow: none; }
+    input[type="time"], input[type="text"], textarea {
+      border: none; background: transparent; padding: 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN SCREEN ══════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="icon">🏥</div>
+      <h1>臨床試驗團隊</h1>
+      <p>線上打卡系統</p>
+    </div>
+    <div class="form-group">
+      <label>請選擇姓名</label>
+      <select id="login-name">
+        <option value="">— 選擇 —</option>
+        <option value="admin">系統管理員</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>密碼</label>
+      <input type="password" id="login-pw" placeholder="請輸入密碼" autocomplete="off">
+    </div>
+    <button class="login-btn" onclick="doLogin()">登入</button>
+    <div class="login-error" id="login-error">❌ 密碼錯誤，請再試一次</div>
+    <div class="login-divider" style="margin-top:20px">初次使用請聯絡管理員取得密碼</div>
+  </div>
+</div>
+
+<!-- ══════════════ APP ══════════════ -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span>🏥</span>
+      <span class="topbar-title">臨床試驗團隊打卡系統</span>
+      <span class="topbar-user" id="topbar-user"></span>
+      <span id="sync-status" style="font-size:12px;opacity:0.85;cursor:pointer" onclick="currentUser==='admin'&&showCloudModal()" title="雲端同步狀態">💾 本地模式</span>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn" id="btn-cloud-cfg" onclick="showCloudModal()" style="display:none">☁ 雲端設定</button>
+      <button class="topbar-btn" id="btn-member-mgmt" onclick="showMemberModal()" style="display:none">👥 成員管理</button>
+      <button class="topbar-btn" id="btn-pw-mgmt" onclick="showPwModal()" style="display:none">🔑 密碼管理</button>
+      <button class="topbar-btn" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+
+  <!-- Admin: member tabs -->
+  <div id="member-tabs">
+    <div class="member-tabs-inner" id="tabs-inner"></div>
+  </div>
+
+  <div class="main">
+    <div class="toolbar">
+      <h2 id="sheet-title">打卡紀錄</h2>
+      <div class="month-nav">
+        <button class="month-btn" onclick="changeMonth(-1)">‹</button>
+        <span class="month-label" id="month-label"></span>
+        <button class="month-btn" onclick="changeMonth(1)">›</button>
+      </div>
+      <button class="action-btn btn-save" onclick="saveData()">💾 儲存</button>
+      <button class="action-btn btn-export" onclick="exportExcel()">📥 匯出 Excel</button>
+      <button class="action-btn btn-export-all" id="btn-export-all" onclick="exportAllExcel()" style="display:none;background:#8e44ad">📊 全員匯出 Excel</button>
+      <button class="action-btn btn-print" onclick="window.print()">🖨️ 列印</button>
+    </div>
+
+    <div class="summary-panel" id="summary-panel"></div>
+
+    <div class="table-wrap">
+      <table id="attendance-table">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:72px">日期</th>
+            <th rowspan="2" style="width:34px">星期</th>
+            <th rowspan="2" class="time-col">上班時間起</th>
+            <th rowspan="2" class="time-col">下班時間訖</th>
+            <th rowspan="2" class="notes-col">上下班補充說明</th>
+            <th colspan="4" class="ot-group">加班（第一次）</th>
+            <th colspan="4" class="ot-group ot-group-2">加班（第二次）</th>
+            <th rowspan="2" style="width:50px">附件</th>
+          </tr>
+          <tr>
+            <th class="time-col ot-group">起</th>
+            <th class="time-col ot-group">訖</th>
+            <th class="ot-hours-col ot-group">時數</th>
+            <th class="notes-col ot-group">說明</th>
+            <th class="time-col ot-group ot-group-2">起</th>
+            <th class="time-col ot-group ot-group-2">訖</th>
+            <th class="ot-hours-col ot-group ot-group-2">時數</th>
+            <th class="notes-col ot-group ot-group-2">說明</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PASSWORD MGMT MODAL ══════════════ -->
+<div class="modal-overlay" id="pw-modal" onclick="if(event.target===this)closePwModal()">
+  <div class="modal-box wide">
+    <button class="modal-close" onclick="closePwModal()">✕</button>
+    <h3>🔑 密碼管理</h3>
+    <p style="font-size:13px;color:#7f8c8d;margin-bottom:12px">修改後請記得儲存。每位成員的密碼只有管理員可以修改。</p>
+    <div id="pw-list"></div>
+    <div class="modal-footer">
+      <button class="action-btn btn-secondary" onclick="closePwModal()">取消</button>
+      <button class="action-btn btn-save" onclick="savePw()">儲存密碼</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MEMBER MGMT MODAL ══════════════ -->
+<div class="modal-overlay" id="member-modal" onclick="if(event.target===this)closeMemberModal()">
+  <div class="modal-box wide">
+    <button class="modal-close" onclick="closeMemberModal()">✕</button>
+    <h3>👥 成員管理</h3>
+    <p style="font-size:13px;color:#7f8c8d;margin-bottom:12px">可新增、刪除或更改成員名稱。刪除後其打卡資料仍保留，可重新加回。</p>
+    <div id="member-list-wrap"></div>
+    <div class="add-member-row">
+      <div class="fg"><label>新增成員姓名</label><input type="text" id="new-member-name" placeholder="輸入姓名"></div>
+      <div class="fg"><label>初始密碼</label><input type="text" id="new-member-pw" placeholder="設定密碼"></div>
+      <button class="action-btn btn-save btn-sm" onclick="addMember()">＋ 新增</button>
+    </div>
+    <div class="modal-footer">
+      <button class="action-btn btn-secondary" onclick="closeMemberModal()">取消</button>
+      <button class="action-btn btn-save" onclick="saveMemberList()">儲存成員名單</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ CLOUD CONFIG MODAL ══════════════ -->
+<div class="modal-overlay" id="cloud-modal" onclick="if(event.target===this)closeCloudModal()">
+  <div class="modal-box wide">
+    <button class="modal-close" onclick="closeCloudModal()">✕</button>
+    <h3>☁ 雲端資料庫設定（Supabase）</h3>
+    <p style="font-size:13px;color:#7f8c8d;margin-bottom:14px">連接後，所有裝置的打卡資料會自動同步。只需設定一次。</p>
+
+    <div style="background:#f4f8ff;border-left:3px solid var(--primary);padding:12px 14px;border-radius:0 8px 8px 0;font-size:12px;line-height:1.8;margin-bottom:14px">
+      <b>📋 設定步驟：</b><br>
+      1. 前往 <a href="https://supabase.com" target="_blank" style="color:var(--primary)">supabase.com</a> 免費註冊並建立 Project<br>
+      2. 進入 Project → 左側選 <b>SQL Editor</b> → 貼上下方 SQL 執行<br>
+      3. 到 <b>Project Settings → API</b> 複製 Project URL 和 anon key 填入下方
+    </div>
+
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--primary);padding:6px 0">📄 點此展開 SQL（貼到 Supabase SQL Editor 執行）</summary>
+      <pre id="setup-sql" style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;margin-top:8px;line-height:1.6">create table if not exists attendance (
+  id bigint generated always as identity primary key,
+  member text not null,
+  month  text not null,
+  rows   jsonb not null default '[]',
+  updated_at timestamptz default now(),
+  unique(member, month)
+);
+alter table attendance enable row level security;
+create policy "public_rw" on attendance
+  for all to anon using (true) with check (true);
+
+create table if not exists settings (
+  key   text primary key,
+  value jsonb not null
+);
+alter table settings enable row level security;
+create policy "public_rw" on settings
+  for all to anon using (true) with check (true);</pre>
+      <button class="action-btn btn-secondary btn-sm" style="margin-top:6px" onclick="copySQL()">📋 複製 SQL</button>
+    </details>
+
+    <div class="form-group">
+      <label>Supabase Project URL</label>
+      <input type="text" id="cloud-url" placeholder="https://xxxxxxxxxxxx.supabase.co">
+    </div>
+    <div class="form-group">
+      <label>Supabase anon public key</label>
+      <input type="text" id="cloud-key" placeholder="eyJhbGciOiJIUzI1NiIs...">
+    </div>
+    <div id="cloud-test-result" style="font-size:13px;min-height:20px;margin-bottom:8px"></div>
+    <div class="modal-footer">
+      <button class="action-btn btn-secondary" onclick="disconnectCloud()">斷開雲端</button>
+      <button class="action-btn btn-secondary" onclick="testCloud()">🔍 測試連線</button>
+      <button class="action-btn btn-save" onclick="connectCloud()">✅ 連接並同步</button>
+    </div>
+  </div>
+</div>
+
+<div class="save-toast" id="save-toast">✅ 已儲存！</div>
+
+<script>
+// ══════════════════════════════════════════
+//  INITIAL DEFAULTS
+// ══════════════════════════════════════════
+const INITIAL_MEMBERS = [
+  { name: '黃惠雯', password: 'hw0001' },
+  { name: '李宇傑', password: 'lj0001' },
+  { name: '陳子惠', password: 'czh001' },
+  { name: '陳怡安', password: 'cya001' },
+  { name: '吳佳穎', password: 'wjy001' },
+  { name: '曾雅敬', password: 'tyj001' },
+  { name: '羅舒敏', password: 'lsm001' },
+  { name: '林恩澤', password: 'lez001' },
+  { name: '劉旻倫', password: 'lml001' },
+  { name: '黃詩芸', password: 'hsy001' }
+];
+
+// ══════════════════════════════════════════
+//  SUPABASE CLOUD
+// ══════════════════════════════════════════
+let sbUrl = '', sbKey = '';
+
+function loadCloudConfig() {
+  sbUrl = localStorage.getItem('ct_sb_url') || '';
+  sbKey = localStorage.getItem('ct_sb_key') || '';
+  updateSyncStatus();
+}
+
+function isCloudEnabled() { return !!(sbUrl && sbKey); }
+
+async function sbReq(method, path, body, extra = {}) {
+  try {
+    const res = await fetch(`${sbUrl}/rest/v1/${path}`, {
+      method,
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}`, 'Content-Type': 'application/json', ...extra },
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) { console.warn('SB err', res.status, await res.text()); return null; }
+    const text = await res.text();
+    return text ? JSON.parse(text) : true;
+  } catch(e) { console.warn('SB fetch err', e.message); return null; }
+}
+
+const UPSERT_HDR = { 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+
+// Attendance
+async function cloudSave(member, mk, rows) {
+  if (!isCloudEnabled()) return;
+  setSyncStatus('syncing');
+  const ok = await sbReq('POST', 'attendance', { member, month: mk, rows, updated_at: new Date().toISOString() }, UPSERT_HDR);
+  setSyncStatus(ok !== null ? 'synced' : 'error');
+}
+
+async function cloudLoad(member, mk) {
+  if (!isCloudEnabled()) return null;
+  const d = await sbReq('GET', `attendance?member=eq.${encodeURIComponent(member)}&month=eq.${encodeURIComponent(mk)}&select=rows`);
+  return (d && d.length) ? d[0].rows : null;
+}
+
+async function cloudLoadAllMembers(mk) {
+  if (!isCloudEnabled()) return null;
+  const d = await sbReq('GET', `attendance?month=eq.${encodeURIComponent(mk)}&select=member,rows`);
+  return d; // [{member, rows}, ...]
+}
+
+// Settings (members list + passwords)
+async function cloudSaveSetting(key, value) {
+  if (!isCloudEnabled()) return;
+  await sbReq('POST', 'settings', { key, value }, UPSERT_HDR);
+}
+
+async function cloudLoadSetting(key) {
+  if (!isCloudEnabled()) return null;
+  const d = await sbReq('GET', `settings?key=eq.${encodeURIComponent(key)}&select=value`);
+  return (d && d.length) ? d[0].value : null;
+}
+
+async function syncSettingsFromCloud() {
+  const [cm, cp] = await Promise.all([
+    cloudLoadSetting('members'),
+    cloudLoadSetting('passwords')
+  ]);
+  if (cm && Array.isArray(cm)) { members = cm; saveMembers(); populateLoginSelect(); if (currentUser === 'admin') renderMemberTabs(); }
+  if (cp && typeof cp === 'object') { Object.assign(passwords, cp); savePasswords(); }
+}
+
+// Sync status UI
+function setSyncStatus(s) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  const map = { syncing:['🔄 同步中','#f39c12'], synced:['☁ 已同步','#4ecca3'], error:['⚠ 同步失敗','#e74c3c'], disabled:['💾 本地模式','#bdc3c7'] };
+  const [txt, col] = map[s] || map.disabled;
+  el.textContent = txt; el.style.color = col;
+}
+
+function updateSyncStatus() { setSyncStatus(isCloudEnabled() ? 'synced' : 'disabled'); }
+
+// Cloud config modal
+function showCloudModal() {
+  document.getElementById('cloud-url').value = sbUrl;
+  document.getElementById('cloud-key').value = sbKey;
+  document.getElementById('cloud-test-result').textContent = '';
+  document.getElementById('cloud-modal').style.display = 'flex';
+}
+function closeCloudModal() { document.getElementById('cloud-modal').style.display = 'none'; }
+
+async function testCloud() {
+  const url = document.getElementById('cloud-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('cloud-key').value.trim();
+  const el  = document.getElementById('cloud-test-result');
+  if (!url || !key) { el.innerHTML = '⚠ 請填入 URL 和 key'; el.style.color = 'orange'; return; }
+  el.innerHTML = '🔄 測試中...'; el.style.color = '#7f8c8d';
+  try {
+    const res = await fetch(`${url}/rest/v1/settings?limit=1`, { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } });
+    if (res.ok) { el.innerHTML = '✅ 連線成功！'; el.style.color = 'green'; }
+    else { el.innerHTML = `❌ 失敗（${res.status}）— 請確認 URL/key 是否正確，以及 SQL 是否已執行`; el.style.color = 'red'; }
+  } catch(e) { el.innerHTML = `❌ 無法連線：${e.message}`; el.style.color = 'red'; }
+}
+
+async function connectCloud() {
+  const url = document.getElementById('cloud-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('cloud-key').value.trim();
+  if (!url || !key) { alert('請填入 Supabase URL 和 anon key'); return; }
+  sbUrl = url; sbKey = key;
+  localStorage.setItem('ct_sb_url', url);
+  localStorage.setItem('ct_sb_key', key);
+  closeCloudModal();
+  setSyncStatus('syncing');
+  // Push current local data to cloud
+  await cloudSaveSetting('members', members);
+  await cloudSaveSetting('passwords', passwords);
+  // Push all attendance data
+  for (const [member, months] of Object.entries(appData)) {
+    for (const [mk, rows] of Object.entries(months)) {
+      await cloudSave(member, mk, rows);
+    }
+  }
+  setSyncStatus('synced');
+  showToast('✅ 雲端連接成功，資料已同步！');
+}
+
+function disconnectCloud() {
+  if (!confirm('確定要斷開雲端連線嗎？資料將只保留在本裝置。')) return;
+  sbUrl = ''; sbKey = '';
+  localStorage.removeItem('ct_sb_url');
+  localStorage.removeItem('ct_sb_key');
+  closeCloudModal();
+  setSyncStatus('disabled');
+  showToast('已切換回本地模式');
+}
+
+function copySQL() {
+  const sql = document.getElementById('setup-sql').textContent;
+  navigator.clipboard.writeText(sql).then(() => showToast('✅ SQL 已複製！'));
+}
+
+const DAYS_ZH    = ['日','一','二','三','四','五','六'];
+const STORAGE_KEY = 'ct_attendance_v2';
+const PW_KEY      = 'ct_passwords_v2';
+const MEMBERS_KEY = 'ct_members_v2';
+
+// ── State ──
+let currentUser   = null;
+let currentMember = null;
+let currentYear, currentMonth;
+let appData   = {};
+let passwords = {};
+let members   = []; // [{ name }]  — passwords stored separately in passwords{}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+function init() {
+  loadCloudConfig();
+  loadMembers();
+  loadPasswords();
+  loadData();
+  populateLoginSelect();
+  const now = new Date();
+  currentYear  = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
+}
+
+// ── Members persistence ──
+function loadMembers() {
+  const saved = localStorage.getItem(MEMBERS_KEY);
+  if (saved) {
+    members = JSON.parse(saved);
+  } else {
+    members = INITIAL_MEMBERS.map(m => ({ name: m.name }));
+    saveMembers();
+  }
+}
+
+function saveMembers() {
+  localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
+}
+
+// ── Passwords persistence ──
+function loadPasswords() {
+  const saved = localStorage.getItem(PW_KEY);
+  if (saved) {
+    passwords = JSON.parse(saved);
+  } else {
+    passwords = { admin: 'admin2024' };
+    INITIAL_MEMBERS.forEach(m => { passwords[m.name] = m.password; });
+    savePasswords();
+  }
+}
+
+function savePasswords() {
+  localStorage.setItem(PW_KEY, JSON.stringify(passwords));
+}
+
+// ── Attendance data persistence ──
+function loadData() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  appData = saved ? JSON.parse(saved) : {};
+}
+
+function saveAllData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+}
+
+// ── Login select ──
+function populateLoginSelect() {
+  const sel = document.getElementById('login-name');
+  // Remove all options except the first two (blank + admin)
+  while (sel.options.length > 2) sel.remove(2);
+  members.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.name;
+    opt.textContent = m.name;
+    sel.appendChild(opt);
+  });
+}
+
+// ══════════════════════════════════════════
+//  LOGIN / LOGOUT
+// ══════════════════════════════════════════
+function doLogin() {
+  const name = document.getElementById('login-name').value;
+  const pw   = document.getElementById('login-pw').value;
+  const err  = document.getElementById('login-error');
+
+  if (!name) { err.style.display = 'block'; err.textContent = '⚠ 請選擇姓名'; return; }
+
+  const correctPw = passwords[name === 'admin' ? 'admin' : name];
+  if (!correctPw || pw !== correctPw) {
+    err.style.display = 'block'; err.textContent = '❌ 密碼錯誤，請再試一次';
+    return;
+  }
+  err.style.display = 'none';
+  currentUser   = name;
+  currentMember = (name === 'admin') ? (members[0] ? members[0].name : null) : name;
+  showApp();
+}
+
+document.getElementById('login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+function doLogout() {
+  currentUser = null; currentMember = null;
+  document.getElementById('login-name').value = '';
+  document.getElementById('login-pw').value   = '';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+//  APP SHELL
+// ══════════════════════════════════════════
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  const isAdmin = currentUser === 'admin';
+  document.getElementById('topbar-user').textContent = isAdmin ? '👤 管理員' : `👤 ${currentUser}`;
+  document.getElementById('btn-pw-mgmt').style.display     = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-member-mgmt').style.display = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-export-all').style.display  = isAdmin ? 'inline-block' : 'none';
+  document.getElementById('btn-cloud-cfg').style.display   = isAdmin ? 'inline-block' : 'none';
+
+  // Admin: sync settings from cloud on login
+  if (isAdmin && isCloudEnabled()) {
+    setSyncStatus('syncing');
+    syncSettingsFromCloud().then(() => setSyncStatus('synced')).catch(() => setSyncStatus('error'));
+  }
+
+  const tabsDiv = document.getElementById('member-tabs');
+  if (isAdmin) {
+    tabsDiv.style.display = 'block';
+    renderMemberTabs();
+  } else {
+    tabsDiv.style.display = 'none';
+  }
+  if (currentMember) renderSheet();
+}
+
+function renderMemberTabs() {
+  const inner = document.getElementById('tabs-inner');
+  inner.innerHTML = '';
+  members.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'mtab' + (m.name === currentMember ? ' active' : '');
+    btn.textContent = m.name;
+    btn.onclick = () => { currentMember = m.name; renderMemberTabs(); renderSheet(); };
+    inner.appendChild(btn);
+  });
+}
+
+// ══════════════════════════════════════════
+//  SHEET
+// ══════════════════════════════════════════
+function renderSheet() {
+  document.getElementById('sheet-title').textContent =
+    currentUser === 'admin' ? `${currentMember} 的打卡紀錄` : `${currentUser} 的打卡紀錄`;
+  document.getElementById('month-label').textContent = `${currentYear} 年 ${currentMonth} 月`;
+  renderTable();
+  renderSummary();
+
+  // Background cloud sync: fetch latest data for this member/month
+  if (isCloudEnabled()) {
+    const snap = { member: currentMember, mk: getMonthKey() };
+    setSyncStatus('syncing');
+    cloudLoad(snap.member, snap.mk).then(cloudRows => {
+      if (!cloudRows) { setSyncStatus(isCloudEnabled() ? 'error' : 'disabled'); return; }
+      // Update local cache
+      if (!appData[snap.member]) appData[snap.member] = {};
+      appData[snap.member][snap.mk] = cloudRows;
+      saveAllData();
+      // Re-render only if still viewing same sheet
+      if (currentMember === snap.member && getMonthKey() === snap.mk) { renderTable(); renderSummary(); }
+      setSyncStatus('synced');
+    }).catch(() => setSyncStatus('error'));
+  }
+}
+
+function changeMonth(delta) {
+  saveAllData();
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  renderSheet();
+}
+
+function getMonthKey() { return `${currentYear}-${String(currentMonth).padStart(2,'0')}`; }
+
+function getOrInitRows() {
+  const mk = getMonthKey();
+  if (!appData[currentMember]) appData[currentMember] = {};
+  if (!appData[currentMember][mk]) {
+    appData[currentMember][mk] = buildEmptyMonth(currentYear, currentMonth);
+  }
+  return appData[currentMember][mk];
+}
+
+function buildEmptyMonth(year, month) {
+  const days = new Date(year, month, 0).getDate();
+  const rows = [];
+  for (let d = 1; d <= days; d++) {
+    const dt = new Date(year, month - 1, d);
+    rows.push({
+      date: `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`,
+      dayNum: dt.getDay(),
+      workStart: '', workEnd: '', workNotes: '',
+      otStart: '', otEnd: '', otHours: '', otNotes: '',
+      otStart2: '', otEnd2: '', otHours2: '', otNotes2: '',
+      attachment: false
+    });
+  }
+  return rows;
+}
+
+function renderTable() {
+  const rows  = getOrInitRows();
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+  rows.forEach((row, idx) => {
+    const isWeekend = row.dayNum === 0 || row.dayNum === 6;
+    const tr = document.createElement('tr');
+    if (isWeekend) tr.classList.add('weekend');
+    const dayCls = row.dayNum === 6 ? 'sat' : row.dayNum === 0 ? 'sun' : '';
+    tr.innerHTML = `
+      <td class="td-date">${row.date.slice(5)}</td>
+      <td class="td-day ${dayCls}">${DAYS_ZH[row.dayNum]}</td>
+      <td class="time-col"><input type="time" value="${row.workStart}" oninput="onField(${idx},'workStart',this.value)"></td>
+      <td class="time-col"><input type="time" value="${row.workEnd}"   oninput="onField(${idx},'workEnd',this.value)"></td>
+      <td class="notes-col"><input type="text" value="${escHtml(row.workNotes)}" placeholder="補充說明" oninput="onField(${idx},'workNotes',this.value)"></td>
+      <td class="time-col"><input type="time" value="${row.otStart}"   oninput="onField(${idx},'otStart',this.value);autoCalcOt(${idx},1)"></td>
+      <td class="time-col"><input type="time" value="${row.otEnd}"     oninput="onField(${idx},'otEnd',this.value);autoCalcOt(${idx},1)"></td>
+      <td class="ot-hours-col" id="ot1-display-${idx}"><input type="text" value="${escHtml(row.otHours)}" placeholder="時數" style="width:62px;text-align:center" oninput="onField(${idx},'otHours',this.value)"></td>
+      <td class="notes-col"><input type="text" value="${escHtml(row.otNotes)}" placeholder="加班事由" oninput="onField(${idx},'otNotes',this.value)"></td>
+      <td class="time-col"><input type="time" value="${row.otStart2}"  oninput="onField(${idx},'otStart2',this.value);autoCalcOt(${idx},2)"></td>
+      <td class="time-col"><input type="time" value="${row.otEnd2}"    oninput="onField(${idx},'otEnd2',this.value);autoCalcOt(${idx},2)"></td>
+      <td class="ot-hours-col" id="ot2-display-${idx}"><input type="text" value="${escHtml(row.otHours2)}" placeholder="時數" style="width:62px;text-align:center" oninput="onField(${idx},'otHours2',this.value)"></td>
+      <td class="notes-col"><input type="text" value="${escHtml(row.otNotes2)}" placeholder="加班事由" oninput="onField(${idx},'otNotes2',this.value)"></td>
+      <td class="attachment"><input type="checkbox" ${row.attachment ? 'checked' : ''} onchange="onField(${idx},'attachment',this.checked)"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function escHtml(str) {
+  if (!str && str !== 0) return '';
+  return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function onField(idx, field, value) { getOrInitRows()[idx][field] = value; }
+
+function autoCalcOt(idx, period) {
+  const row = getOrInitRows()[idx];
+  const startKey = period === 2 ? 'otStart2' : 'otStart';
+  const endKey   = period === 2 ? 'otEnd2'   : 'otEnd';
+  const hoursKey = period === 2 ? 'otHours2' : 'otHours';
+  const displayId = period === 2 ? `ot2-display-${idx}` : `ot1-display-${idx}`;
+  if (row[startKey] && row[endKey]) {
+    const [sh, sm] = row[startKey].split(':').map(Number);
+    const [eh, em] = row[endKey].split(':').map(Number);
+    let mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins < 0) mins += 1440;
+    row[hoursKey] = mins > 0 ? String(Math.round(mins / 60 * 2) / 2) : '';
+    const el = document.querySelector(`#${displayId} input`);
+    if (el) el.value = row[hoursKey];
+  }
+}
+
+function renderSummary() {
+  const rows = getOrInitRows();
+  let workDays = 0, totalWorkMins = 0, totalOtHrs = 0, attachCount = 0;
+  rows.forEach(row => {
+    const isWeekend = row.dayNum === 0 || row.dayNum === 6;
+    if (!isWeekend && row.workStart && row.workEnd) {
+      workDays++;
+      const [sh, sm] = row.workStart.split(':').map(Number);
+      const [eh, em] = row.workEnd.split(':').map(Number);
+      totalWorkMins += (eh * 60 + em) - (sh * 60 + sm);
+    }
+    const ot  = parseFloat(row.otHours);  if (!isNaN(ot))  totalOtHrs += ot;
+    const ot2 = parseFloat(row.otHours2); if (!isNaN(ot2)) totalOtHrs += ot2;
+    if (row.attachment) attachCount++;
+  });
+  document.getElementById('summary-panel').innerHTML = `
+    <div class="stat-card work"><div class="val">${workDays}</div><div class="lbl">出勤天數</div></div>
+    <div class="stat-card work"><div class="val">${(totalWorkMins/60).toFixed(1)}</div><div class="lbl">上班總時數（小時）</div></div>
+    <div class="stat-card ot"><div class="val">${totalOtHrs}</div><div class="lbl">加班總時數</div></div>
+    <div class="stat-card"><div class="val">${attachCount}</div><div class="lbl">有附件天數</div></div>
+  `;
+}
+
+function saveData() {
+  saveAllData();
+  renderSummary();
+  showToast('✅ 已儲存！');
+  // Push to cloud in background
+  if (isCloudEnabled()) {
+    const rows = getOrInitRows();
+    cloudSave(currentMember, getMonthKey(), rows);
+  }
+}
+
+// ── 共用：把一個成員的 rows 轉成 SheetJS 二維陣列 ──
+const XLSX_HEADERS = [
+  '日期','星期','上班時間起','下班時間訖','上下班補充說明',
+  '加班①起','加班①訖','加班①時數','加班①說明',
+  '加班②起','加班②訖','加班②時數','加班②說明','附件說明'
+];
+
+function rowsToAoa(rows) {
+  const aoa = [XLSX_HEADERS];
+  rows.forEach(row => {
+    aoa.push([
+      row.date,
+      DAYS_ZH[row.dayNum],
+      row.workStart  || '',
+      row.workEnd    || '',
+      row.workNotes  || '',
+      row.otStart    || '',
+      row.otEnd      || '',
+      row.otHours !== '' && row.otHours != null ? Number(row.otHours) : '',
+      row.otNotes    || '',
+      row.otStart2   || '',
+      row.otEnd2     || '',
+      row.otHours2 !== '' && row.otHours2 != null ? Number(row.otHours2) : '',
+      row.otNotes2   || '',
+      row.attachment ? '是' : ''
+    ]);
+  });
+  return aoa;
+}
+
+function applySheetStyle(ws, memberName) {
+  // Column widths
+  ws['!cols'] = [
+    {wch:12},{wch:5},{wch:10},{wch:10},{wch:22},
+    {wch:10},{wch:10},{wch:8},{wch:22},
+    {wch:10},{wch:10},{wch:8},{wch:22},{wch:5}
+  ];
+}
+
+// ── 匯出當前成員（單人）→ xlsx ──
+function exportExcel() {
+  saveAllData();
+  const mk = getMonthKey();
+  const rows = getOrInitRows();
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rowsToAoa(rows));
+  applySheetStyle(ws, currentMember);
+  XLSX.utils.book_append_sheet(wb, ws, currentMember);
+  XLSX.writeFile(wb, `打卡紀錄_${currentMember}_${mk}.xlsx`);
+}
+
+// ── 匯出全部成員（管理員）→ 多分頁 xlsx ──
+async function exportAllExcel() {
+  saveAllData();
+  const mk = getMonthKey();
+  showToast('🔄 準備匯出中...');
+
+  // Try to pull fresh data from cloud for all members
+  if (isCloudEnabled()) {
+    setSyncStatus('syncing');
+    const cloudAll = await cloudLoadAllMembers(mk);
+    if (cloudAll && cloudAll.length) {
+      cloudAll.forEach(({ member, rows }) => {
+        if (!appData[member]) appData[member] = {};
+        appData[member][mk] = rows;
+      });
+      saveAllData();
+      setSyncStatus('synced');
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  members.forEach(m => {
+    const rows = (appData[m.name] && appData[m.name][mk]) || buildEmptyMonth(currentYear, currentMonth);
+    const ws = XLSX.utils.aoa_to_sheet(rowsToAoa(rows));
+    applySheetStyle(ws, m.name);
+    XLSX.utils.book_append_sheet(wb, ws, m.name);
+  });
+
+  XLSX.writeFile(wb, `打卡紀錄_全員_${mk}.xlsx`);
+  showToast(`✅ 已匯出 ${members.length} 位成員的 ${mk} 打卡紀錄！`);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('save-toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2200);
+}
+
+// ══════════════════════════════════════════
+//  PASSWORD MODAL
+// ══════════════════════════════════════════
+function showPwModal() {
+  let html = '<div class="pw-grid">';
+  html += `<div><label>管理員密碼</label><input type="password" id="pw-admin" value="${escHtml(passwords['admin'])}" autocomplete="off"></div>`;
+  members.forEach(m => {
+    const safeId = CSS.escape(m.name);
+    html += `<div><label>${m.name}</label><input type="password" data-name="${escHtml(m.name)}" class="pw-member-input" value="${escHtml(passwords[m.name] || '')}" autocomplete="off"></div>`;
+  });
+  html += '</div>';
+  document.getElementById('pw-list').innerHTML = html;
+  document.getElementById('pw-modal').style.display = 'flex';
+}
+
+function closePwModal() { document.getElementById('pw-modal').style.display = 'none'; }
+
+function savePw() {
+  passwords['admin'] = document.getElementById('pw-admin').value;
+  document.querySelectorAll('.pw-member-input').forEach(el => {
+    if (el.value) passwords[el.dataset.name] = el.value;
+  });
+  savePasswords();
+  if (isCloudEnabled()) cloudSaveSetting('passwords', passwords);
+  closePwModal();
+  showToast('✅ 密碼已更新！');
+}
+
+// ══════════════════════════════════════════
+//  MEMBER MANAGEMENT MODAL
+// ══════════════════════════════════════════
+// tempMembers: working copy while modal is open
+let tempMembers = [];
+
+function showMemberModal() {
+  tempMembers = members.map(m => ({ ...m }));
+  renderMemberListInModal();
+  document.getElementById('new-member-name').value = '';
+  document.getElementById('new-member-pw').value   = '';
+  document.getElementById('member-modal').style.display = 'flex';
+}
+
+function closeMemberModal() { document.getElementById('member-modal').style.display = 'none'; }
+
+function renderMemberListInModal() {
+  let html = '<table class="member-list-table"><thead><tr><th>#</th><th>姓名</th><th>目前密碼</th><th>操作</th></tr></thead><tbody>';
+  tempMembers.forEach((m, i) => {
+    html += `<tr>
+      <td style="color:#aaa;width:30px">${i + 1}</td>
+      <td><input type="text" value="${escHtml(m.name)}" style="width:110px" oninput="tempMembers[${i}].name=this.value"></td>
+      <td style="color:#aaa;font-size:12px">${passwords[m.name] ? '已設定' : '—'}</td>
+      <td><button class="btn-danger" onclick="removeTempMember(${i})">刪除</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('member-list-wrap').innerHTML = html;
+}
+
+function removeTempMember(idx) {
+  if (!confirm(`確定要從名單中移除「${tempMembers[idx].name}」嗎？\n（打卡資料會保留，日後可重新加回）`)) return;
+  tempMembers.splice(idx, 1);
+  renderMemberListInModal();
+}
+
+function addMember() {
+  const nameEl = document.getElementById('new-member-name');
+  const pwEl   = document.getElementById('new-member-pw');
+  const name   = nameEl.value.trim();
+  const pw     = pwEl.value.trim();
+
+  if (!name) { alert('請輸入姓名'); nameEl.focus(); return; }
+  if (!pw)   { alert('請設定初始密碼'); pwEl.focus(); return; }
+  if (tempMembers.some(m => m.name === name)) { alert('此成員已存在'); return; }
+
+  tempMembers.push({ name });
+  passwords[name] = pw;          // save pw immediately so saveMemberList sees it
+  nameEl.value = '';
+  pwEl.value   = '';
+  renderMemberListInModal();
+}
+
+function saveMemberList() {
+  // Collect any name edits from inputs (oninput already updates tempMembers, but let's be safe)
+  const inputs = document.querySelectorAll('#member-list-wrap tbody input[type="text"]');
+  inputs.forEach((el, i) => { if (tempMembers[i]) tempMembers[i].name = el.value.trim(); });
+
+  // Validate: no empty names, no duplicates
+  const names = tempMembers.map(m => m.name);
+  if (names.some(n => !n)) { alert('成員姓名不可為空'); return; }
+  if (new Set(names).size !== names.length) { alert('成員姓名有重複，請修正'); return; }
+
+  members = tempMembers.map(m => ({ name: m.name }));
+  saveMembers();
+  savePasswords();
+
+  // Refresh login select & tabs
+  populateLoginSelect();
+  if (currentUser === 'admin') {
+    if (!members.find(m => m.name === currentMember)) {
+      currentMember = members[0] ? members[0].name : null;
+    }
+    renderMemberTabs();
+    if (currentMember) renderSheet();
+  }
+
+  if (isCloudEnabled()) {
+    cloudSaveSetting('members', members);
+    cloudSaveSetting('passwords', passwords);
+  }
+  closeMemberModal();
+  showToast('✅ 成員名單已更新！');
+}
+
+// ── Start ──
+init();
+</script>
+</body>
+</html>
